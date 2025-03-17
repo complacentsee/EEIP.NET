@@ -1182,14 +1182,20 @@ namespace Sres.Net.EEIP
         /// <returns>Session Handle</returns>	
         public byte[] GetAttributeAll(CIPRoute route, int classID, int instanceID)
         {
-            byte[] requestedPath = route.CombineWithEPath(GetEPath(classID, instanceID, 0));
+
+            
+            // This is the epath to the class and instance. 
+            byte[] requestedPath = GetEPath(classID, instanceID, 0);
+
             if (sessionHandle == 0)             //If a Session is not Registered, Try to Registers a Session with the predefined IP-Address and Port
                 this.RegisterSession();
-            byte[] dataToSend = new byte[42 + requestedPath.Length];
             Encapsulation encapsulation = new Encapsulation();
             encapsulation.SessionHandle = sessionHandle;
             encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
-            encapsulation.Length = (UInt16)(18 + requestedPath.Length);
+
+            // Fixme: This is currently wrong... move lower
+            //encapsulation.Length = (UInt16)(18 + requestedPath.Length);
+            encapsulation.Length = (UInt16)(50);
             //---------------Interface Handle CIP
             encapsulation.CommandSpecificData.Add(0);
             encapsulation.CommandSpecificData.Add(0);
@@ -1202,6 +1208,7 @@ namespace Sres.Net.EEIP
             encapsulation.CommandSpecificData.Add(0);
             //----------------Timeout
 
+
             //Common Packet Format (Table 2-6.1)
             Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
             commonPacketFormat.ItemCount = 0x02;
@@ -1210,10 +1217,30 @@ namespace Sres.Net.EEIP
             commonPacketFormat.AddressLength = 0x0000;
 
             commonPacketFormat.DataItem = 0xB2;
-            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length); //WAS 6
+
+            // FIXME This is wrong:
+            // FIX ME: Length should be the remaining length of the packet so should include route paths. 
+            //commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length); //WAS 6
+            commonPacketFormat.DataLength = (UInt16)(34); 
+            //---------------- Unconnected Message
+            commonPacketFormat.Data.Add(0x52); // Unconnected Message
+            commonPacketFormat.Data.Add(0x02); // 2 words
+            commonPacketFormat.Data.Add(0x20); // 8 bit class segment
+            commonPacketFormat.Data.Add(0x06); // Class 6
+            commonPacketFormat.Data.Add(0x24); // 8 bit instance segment
+            commonPacketFormat.Data.Add(0x01); // instance 01
+            //---------------- Unconnected Message
+            
+            commonPacketFormat.Data.Add(0x04); // Actual Timeout      
+            commonPacketFormat.Data.Add(0xb6); // Actual Timeout    
 
 
+            // FIXME: Dynamically Calculate this:
+            //---------------- Embudded Message Request Size
+            commonPacketFormat.Data.Add(0x06); 
+            commonPacketFormat.Data.Add(0x00); 
 
+            // Handle the actual request now. 
             //----------------CIP Command "Get Attribute All"
             commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Get_Attributes_All);
             //----------------CIP Command "Get Attribute All"
@@ -1232,11 +1259,21 @@ namespace Sres.Net.EEIP
                 commonPacketFormat.Data.Add(requestedPath[i]);
             }
 
+            //---------------- Add Route
+            // Route Path in words
+            commonPacketFormat.Data.Add(0x08); // FIXME: Route Path in words
+            commonPacketFormat.Data.Add(0x00); // Reserved (forward padding by 1)
+            byte[] hardcodedRoute = {0x13, 0xd, 0x31, 0x30, 0x2e, 0x31, 0x35, 0x32, 0x2e, 0x33, 0x35, 0x2e, 0x31, 0x34, 0x38,0x00};
+            for (int i = 0; i < hardcodedRoute.Length; i++)
+            {
+                commonPacketFormat.Data.Add(hardcodedRoute[i]);
+            }
+            //---------------- Add Route
+
             byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
             System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
             System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
            
-
             stream.Write(dataToWrite, 0, dataToWrite.Length);
             byte[] data = new Byte[564];
 
