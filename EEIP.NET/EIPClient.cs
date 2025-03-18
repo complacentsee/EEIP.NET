@@ -1129,14 +1129,8 @@ namespace Sres.Net.EEIP
             encapsulation.SessionHandle = sessionHandle;
             encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
 
-            // Fixme: This is currently wrong... move lower
-            //encapsulation.Length = (UInt16)(18 + requestedPath.Length);
-            //encapsulation.Length = (UInt16)(18 + requestedPath.Length + route.Length);
+            encapsulation.Length = (UInt16)(18 + 12 + requestedPath.Length + route.Length);
 
-            var length = 18 + requestedPath.Length + route.Length;
-            Console.WriteLine("Length: " + length);
-
-            encapsulation.Length = (UInt16)(50);
             //---------------Interface Handle CIP
             encapsulation.CommandSpecificData.Add(0);
             encapsulation.CommandSpecificData.Add(0);
@@ -1159,10 +1153,9 @@ namespace Sres.Net.EEIP
 
             commonPacketFormat.DataItem = 0xB2;
 
-            // FIXME This is wrong:
-            // FIX ME: Length should be the remaining length of the packet so should include route paths. 
-            //commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length); //WAS 6
-            commonPacketFormat.DataLength = (UInt16)(34); 
+            // Length should be the remaining length of the packet so should include route path and UCMM. 
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + route.Length + 12); 
+
             //---------------- Unconnected Message
             commonPacketFormat.Data.Add(0x52); // Unconnected Message
             commonPacketFormat.Data.Add(0x02); // 2 words
@@ -1175,11 +1168,11 @@ namespace Sres.Net.EEIP
             commonPacketFormat.Data.Add(0x04); // Actual Timeout      
             commonPacketFormat.Data.Add(0xb6); // Actual Timeout    
 
-
-            // FIXME: Dynamically Calculate this:
             //---------------- Embudded Message Request Size
-            commonPacketFormat.Data.Add(0x06); 
-            commonPacketFormat.Data.Add(0x00); 
+            // Calculate the embedded message request size as a 16-bit unsigned integer.
+            ushort embeddedMessageRequestSize = (ushort)(2 + requestedPath.Length);
+            commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize & 0xFF));       // Lower byte
+            commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize >> 8));         // Upper byte
 
             // Handle the actual request now. 
             //----------------CIP Command "Get Attribute All"
@@ -1201,14 +1194,12 @@ namespace Sres.Net.EEIP
             }
 
             //---------------- Add Route
-            // Route Path in words
-            commonPacketFormat.Data.Add(0x08); // FIXME: Route Path in words
+            commonPacketFormat.Data.Add((byte)(route.Length / 2));
             commonPacketFormat.Data.Add(0x00); // Reserved (forward padding by 1)
 
-            byte[] hardcodedRoute = {0x13, 0xd, 0x31, 0x30, 0x2e, 0x31, 0x35, 0x32, 0x2e, 0x33, 0x35, 0x2e, 0x31, 0x34, 0x38, 0x00};
-            for (int i = 0; i < hardcodedRoute.Length; i++)
+            for (int i = 0; i < route.Length; i++)
             {
-                commonPacketFormat.Data.Add(hardcodedRoute[i]);
+                commonPacketFormat.Data.Add(route[i]);
             }
             //---------------- Add Route
 
