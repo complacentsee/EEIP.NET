@@ -1032,6 +1032,114 @@ namespace Sres.Net.EEIP
             return returnData;
         }
 
+
+        public byte[] GetAttributeSingle(byte[] route, int classID, int instanceID, int attributeID)
+        {
+            byte[] requestedPath = GetEPath(classID, instanceID, attributeID);
+            if (sessionHandle == 0)             //If a Session is not Registers, Try to Registers a Session with the predefined IP-Address and Port
+                this.RegisterSession();
+            byte[] dataToSend = new byte[42+ requestedPath.Length];
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(18 + 12 + requestedPath.Length + route.Length);
+            //---------------Interface Handle CIP
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            //----------------Interface Handle CIP
+
+            //----------------Timeout
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            //----------------Timeout
+
+            //Common Packet Format (Table 2-6.1)
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+
+            commonPacketFormat.AddressItem = 0x0000;        //NULL (used for UCMM Messages)
+            commonPacketFormat.AddressLength = 0x0000;
+
+            commonPacketFormat.DataItem = 0xB2;
+			
+            // Length should be the remaining length of the packet so should include route path and UCMM.
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + route.Length + 12);
+            //---------------- Unconnected Message
+            commonPacketFormat.Data.Add(0x52); // Unconnected Message
+            commonPacketFormat.Data.Add(0x02); // 2 words
+            commonPacketFormat.Data.Add(0x20); // 8 bit class segment
+            commonPacketFormat.Data.Add(0x06); // Class 6
+            commonPacketFormat.Data.Add(0x24); // 8 bit instance segment
+            commonPacketFormat.Data.Add(0x01); // instance 01
+            //---------------- Unconnected Message
+            
+            commonPacketFormat.Data.Add(0x04); // Actual Timeout      
+            commonPacketFormat.Data.Add(0xb6); // Actual Timeout    
+            //---------------- Embudded Message Request Size
+            // Calculate the embedded message request size as a 16-bit unsigned integer.
+            ushort embeddedMessageRequestSize = (ushort)(2 + requestedPath.Length);
+            commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize & 0xFF));       // Lower byte
+            commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize >> 8));         // Upper byte
+            // Handle the actual request now.
+
+
+
+            //----------------CIP Command "Get Attribute Single"
+            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Get_Attribute_Single);
+            //----------------CIP Command "Get Attribute Single"
+
+            //----------------Requested Path size (number of 16 bit words)
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+            //----------------Requested Path size (number of 16 bit words)
+
+            //----------------Path segment for Class ID
+            //----------------Path segment for Class ID
+
+            //----------------Path segment for Instance ID
+            //----------------Path segment for Instace ID
+
+            //----------------Path segment for Attribute ID
+            //----------------Path segment for Attribute ID
+
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+			
+            //---------------- Add Route
+            commonPacketFormat.Data.Add((byte)(route.Length / 2));
+            commonPacketFormat.Data.Add(0x00); // Reserved (forward padding by 1)
+            for (int i = 0; i < route.Length; i++)
+            {
+                commonPacketFormat.Data.Add(route[i]);
+            }
+            //---------------- Add Route			
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+            encapsulation.toBytes();
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] data = new Byte[564];
+
+            Int32 bytes = stream.Read(data, 0, data.Length);
+
+            //--------------------------BEGIN Error?
+            if (data[42] != 0)      //Exception codes see "Table B-1.1 CIP General Status Codes"
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+            }
+            //--------------------------END Error?
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(data, 44, returnData, 0, bytes-44);
+
+            return returnData;
+        }
+        
         /// <summary>
         /// Implementation of Common Service "Get_Attribute_All" - Service Code: 0x01
         /// </summary>
