@@ -11,6 +11,8 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
+            byte[] bytes = Sres.Net.EEIP.CIPRouteBuilder.ParsePath("3,10.151.35.148");
+            Console.WriteLine(BitConverter.ToString(bytes));
             Sres.Net.EEIP.EEIPClient eipClient = new Sres.Net.EEIP.EEIPClient();
 
             //UInt32 sessionHandle = eipClient.RegisterSession("192.168.178.66", 0xAF12);

@@ -1033,68 +1033,6 @@ namespace Sres.Net.EEIP
         }
 
         /// <summary>
-        /// Retrieves a single attribute value via CIP using a specified route.
-        /// </summary>
-        public byte[] GetAttributeSingle(CIPRoute route, int classID, int instanceID, int attributeID)
-        {
-            byte[] requestedPath = route.CombineWithEPath(GetEPath(classID, instanceID, attributeID));
-
-            if (sessionHandle == 0)
-                this.RegisterSession();
-
-            Encapsulation encapsulation = new Encapsulation
-            {
-                SessionHandle = sessionHandle,
-                Command = Encapsulation.CommandsEnum.SendRRData,
-                Length = (UInt16)(18 + requestedPath.Length)
-            };
-
-            // Interface Handle (CIP)
-            encapsulation.CommandSpecificData.AddRange(new byte[] { 0, 0, 0, 0 });
-            // Timeout
-            encapsulation.CommandSpecificData.AddRange(new byte[] { 0, 0 });
-
-            // Common Packet Format (Table 2-6.1)
-            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat
-            {
-                ItemCount = 0x02,
-                AddressItem = 0x0000,
-                AddressLength = 0x0000,
-                DataItem = 0xB2,
-                DataLength = (UInt16)(2 + requestedPath.Length)
-            };
-
-            // CIP Command "Get Attribute Single"
-            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Get_Attribute_Single);
-            // Requested Path size (number of 16-bit words)
-            commonPacketFormat.Data.Add((byte)((requestedPath.Length + 1) / 2));
-
-            // Append requested path bytes
-            commonPacketFormat.Data.AddRange(requestedPath);
-
-            byte[] encapsulationBytes = encapsulation.toBytes();
-            byte[] commonPacketBytes = commonPacketFormat.toBytes();
-
-            byte[] dataToWrite = new byte[encapsulationBytes.Length + commonPacketBytes.Length];
-            Buffer.BlockCopy(encapsulationBytes, 0, dataToWrite, 0, encapsulationBytes.Length);
-            Buffer.BlockCopy(commonPacketBytes, 0, dataToWrite, encapsulationBytes.Length, commonPacketBytes.Length);
-
-            stream.Write(dataToWrite, 0, dataToWrite.Length);
-
-            byte[] data = new byte[564];
-            int bytes = stream.Read(data, 0, data.Length);
-
-            // Error handling (Table B-1.1 CIP General Status Codes)
-            if (data[42] != 0)
-                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
-
-            byte[] returnData = new byte[bytes - 44];
-            Buffer.BlockCopy(data, 44, returnData, 0, bytes - 44);
-
-            return returnData;
-        }
-
-        /// <summary>
         /// Implementation of Common Service "Get_Attribute_All" - Service Code: 0x01
         /// </summary>
         /// <param name="classID">Class id of requested Attributes</param> 
@@ -1180,10 +1118,8 @@ namespace Sres.Net.EEIP
         /// <param name="classID">Class id of requested Attributes</param> 
         /// <param name="instanceID">Instance of Requested Attributes (0 for class Attributes)</param> 
         /// <returns>Session Handle</returns>	
-        public byte[] GetAttributeAll(CIPRoute route, int classID, int instanceID)
+        public byte[] GetAttributeAll(byte[] route, int classID, int instanceID)
         {
-
-            
             // This is the epath to the class and instance. 
             byte[] requestedPath = GetEPath(classID, instanceID, 0);
 
@@ -1195,6 +1131,11 @@ namespace Sres.Net.EEIP
 
             // Fixme: This is currently wrong... move lower
             //encapsulation.Length = (UInt16)(18 + requestedPath.Length);
+            //encapsulation.Length = (UInt16)(18 + requestedPath.Length + route.Length);
+
+            var length = 18 + requestedPath.Length + route.Length;
+            Console.WriteLine("Length: " + length);
+
             encapsulation.Length = (UInt16)(50);
             //---------------Interface Handle CIP
             encapsulation.CommandSpecificData.Add(0);
@@ -1263,7 +1204,8 @@ namespace Sres.Net.EEIP
             // Route Path in words
             commonPacketFormat.Data.Add(0x08); // FIXME: Route Path in words
             commonPacketFormat.Data.Add(0x00); // Reserved (forward padding by 1)
-            byte[] hardcodedRoute = {0x13, 0xd, 0x31, 0x30, 0x2e, 0x31, 0x35, 0x32, 0x2e, 0x33, 0x35, 0x2e, 0x31, 0x34, 0x38,0x00};
+
+            byte[] hardcodedRoute = {0x13, 0xd, 0x31, 0x30, 0x2e, 0x31, 0x35, 0x32, 0x2e, 0x33, 0x35, 0x2e, 0x31, 0x34, 0x38, 0x00};
             for (int i = 0; i < hardcodedRoute.Length; i++)
             {
                 commonPacketFormat.Data.Add(hardcodedRoute[i]);
