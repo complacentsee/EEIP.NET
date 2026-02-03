@@ -1417,6 +1417,202 @@ namespace Sres.Net.EEIP
             return returnData;
         }
 
+
+        /// <summary>
+        /// Send a generic CIP message with any service code
+        /// </summary>
+        /// <param name="serviceCode">CIP Service Code (e.g., 0x32 for Scattered Read)</param>
+        /// <param name="classID">Class ID to target</param>
+        /// <param name="instanceID">Instance ID to target</param>
+        /// <param name="requestData">Request data bytes (can be empty)</param>
+        /// <returns>Response data bytes</returns>
+        public byte[] GenericCIPMessage(byte serviceCode, int classID, int instanceID, byte[] requestData)
+        {
+            byte[] requestedPath = GetEPath(classID, instanceID, 0);
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(18 + requestedPath.Length + requestData.Length);
+
+            //---------------Interface Handle CIP
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            //----------------Interface Handle CIP
+
+            //----------------Timeout
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            //----------------Timeout
+
+            //Common Packet Format (Table 2-6.1)
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+
+            commonPacketFormat.AddressItem = 0x0000;        //NULL (used for UCMM Messages)
+            commonPacketFormat.AddressLength = 0x0000;
+
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + requestData.Length);
+
+            //----------------CIP Service Code
+            commonPacketFormat.Data.Add(serviceCode);
+            //----------------CIP Service Code
+
+            //----------------Requested Path size (number of 16 bit words)
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+            //----------------Requested Path size (number of 16 bit words)
+
+            //----------------Add Path
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            //----------------Add Request Data
+            for (int i = 0; i < requestData.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestData[i]);
+            }
+            //----------------Request Data
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] data = new Byte[564];
+
+            Int32 bytes = stream.Read(data, 0, data.Length);
+
+            //--------------------------BEGIN Error?
+            if (data[42] != 0)      //Exception codes see "Table B-1.1 CIP General Status Codes"
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+            }
+            //--------------------------END Error?
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(data, 44, returnData, 0, bytes - 44);
+
+            return returnData;
+        }
+
+        /// <summary>
+        /// Send a generic CIP message with any service code through a route
+        /// </summary>
+        /// <param name="route">CIP route path to the device</param>
+        /// <param name="serviceCode">CIP Service Code (e.g., 0x32 for Scattered Read)</param>
+        /// <param name="classID">Class ID to target</param>
+        /// <param name="instanceID">Instance ID to target</param>
+        /// <param name="requestData">Request data bytes (can be empty)</param>
+        /// <returns>Response data bytes</returns>
+        public byte[] GenericCIPMessage(byte[] route, byte serviceCode, int classID, int instanceID, byte[] requestData)
+        {
+            byte[] requestedPath = GetEPath(classID, instanceID, 0);
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(18 + 12 + requestedPath.Length + route.Length + requestData.Length);
+
+            //---------------Interface Handle CIP
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            //----------------Interface Handle CIP
+
+            //----------------Timeout
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            //----------------Timeout
+
+            //Common Packet Format (Table 2-6.1)
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+
+            commonPacketFormat.AddressItem = 0x0000;        //NULL (used for UCMM Messages)
+            commonPacketFormat.AddressLength = 0x0000;
+
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + route.Length + 12 + requestData.Length);
+
+            //---------------- Unconnected Message
+            commonPacketFormat.Data.Add(0x52); // Unconnected Message
+            commonPacketFormat.Data.Add(0x02); // 2 words
+            commonPacketFormat.Data.Add(0x20); // 8 bit class segment
+            commonPacketFormat.Data.Add(0x06); // Class 6
+            commonPacketFormat.Data.Add(0x24); // 8 bit instance segment
+            commonPacketFormat.Data.Add(0x01); // instance 01
+            //---------------- Unconnected Message
+
+            commonPacketFormat.Data.Add(0x04); // Actual Timeout
+            commonPacketFormat.Data.Add(0xb6); // Actual Timeout
+
+            //---------------- Embedded Message Request Size
+            ushort embeddedMessageRequestSize = (ushort)(2 + requestedPath.Length + requestData.Length);
+            commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize & 0xFF));
+            commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize >> 8));
+
+            //----------------CIP Service Code
+            commonPacketFormat.Data.Add(serviceCode);
+            //----------------CIP Service Code
+
+            //----------------Requested Path size (number of 16 bit words)
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+            //----------------Requested Path size (number of 16 bit words)
+
+            //----------------Add Path
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            //----------------Add Request Data
+            for (int i = 0; i < requestData.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestData[i]);
+            }
+            //----------------Request Data
+
+            //---------------- Add Route
+            commonPacketFormat.Data.Add((byte)(route.Length / 2));
+            commonPacketFormat.Data.Add(0x00); // Reserved
+            for (int i = 0; i < route.Length; i++)
+            {
+                commonPacketFormat.Data.Add(route[i]);
+            }
+            //---------------- Add Route
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] data = new Byte[564];
+
+            Int32 bytes = stream.Read(data, 0, data.Length);
+
+            //--------------------------BEGIN Error?
+            if (data[42] != 0)      //Exception codes see "Table B-1.1 CIP General Status Codes"
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+            }
+            //--------------------------END Error?
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(data, 44, returnData, 0, bytes - 44);
+
+            return returnData;
+        }
+
         /// <summary>
         /// Get the Encrypted Request Path - See Volume 1 Appendix C (C9)
         /// e.g. for 8 Bit: 20 05 24 02 30 01
