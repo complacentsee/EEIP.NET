@@ -1428,7 +1428,35 @@ namespace Sres.Net.EEIP
         /// <returns>Response data bytes</returns>
         public byte[] GenericCIPMessage(byte serviceCode, int classID, int instanceID, byte[] requestData)
         {
-            byte[] requestedPath = GetEPath(classID, instanceID, 0);
+            return GenericCIPMessage(serviceCode, classID, instanceID, 0, requestData);
+        }
+
+        /// <summary>
+        /// Send a generic CIP message with any service code through a route
+        /// </summary>
+        /// <param name="route">CIP route path to the device</param>
+        /// <param name="serviceCode">CIP Service Code (e.g., 0x32 for Scattered Read)</param>
+        /// <param name="classID">Class ID to target</param>
+        /// <param name="instanceID">Instance ID to target</param>
+        /// <param name="requestData">Request data bytes (can be empty)</param>
+        /// <returns>Response data bytes</returns>
+        public byte[] GenericCIPMessage(byte[] route, byte serviceCode, int classID, int instanceID, byte[] requestData)
+        {
+            return GenericCIPMessage(route, serviceCode, classID, instanceID, 0, requestData);
+        }
+
+        /// <summary>
+        /// Send a generic CIP message with any service code
+        /// </summary>
+        /// <param name="serviceCode">CIP Service Code (e.g., 0x32 for Scattered Read)</param>
+        /// <param name="classID">Class ID to target</param>
+        /// <param name="instanceID">Instance ID to target</param>
+        /// <param name="attributeID"Request Attribute ID to target</param>
+        /// <param name="requestData">Request data bytes (can be empty)</param>
+        /// <returns>Response data bytes</returns>
+        public byte[] GenericCIPMessage(byte serviceCode, int classID, int instanceID, int attributeID, byte[] requestData)
+        {
+            byte[] requestedPath = GetEPath(classID, instanceID, attributeID);
             if (sessionHandle == 0)
                 this.RegisterSession();
 
@@ -1509,11 +1537,12 @@ namespace Sres.Net.EEIP
         /// <param name="serviceCode">CIP Service Code (e.g., 0x32 for Scattered Read)</param>
         /// <param name="classID">Class ID to target</param>
         /// <param name="instanceID">Instance ID to target</param>
+        /// <param name="attributeID"Request Attribute ID to target</param>
         /// <param name="requestData">Request data bytes (can be empty)</param>
         /// <returns>Response data bytes</returns>
-        public byte[] GenericCIPMessage(byte[] route, byte serviceCode, int classID, int instanceID, byte[] requestData)
+        public byte[] GenericCIPMessage(byte[] route, byte serviceCode, int classID, int instanceID, int attributeID, byte[] requestData)
         {
-            byte[] requestedPath = GetEPath(classID, instanceID, 0);
+            byte[] requestedPath = GetEPath(classID, instanceID, attributeID);
             if (sessionHandle == 0)
                 this.RegisterSession();
 
@@ -1612,6 +1641,11 @@ namespace Sres.Net.EEIP
 
             return returnData;
         }
+
+
+
+
+
 
         /// <summary>
         /// Get the Encrypted Request Path - See Volume 1 Appendix C (C9)
