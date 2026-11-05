@@ -1546,10 +1546,16 @@ namespace Sres.Net.EEIP
             if (sessionHandle == 0)
                 this.RegisterSession();
 
+            // Embedded Message Request Size is the true (unpadded) length of the embedded request.
+            // CIP requires a pad byte after the embedded request when that length is odd, so the
+            // Route Path Size field starts on a 16-bit boundary.
+            ushort embeddedMessageRequestSize = (ushort)(2 + requestedPath.Length + requestData.Length);
+            int padLength = embeddedMessageRequestSize % 2;
+
             Encapsulation encapsulation = new Encapsulation();
             encapsulation.SessionHandle = sessionHandle;
             encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
-            encapsulation.Length = (UInt16)(18 + 12 + requestedPath.Length + route.Length + requestData.Length);
+            encapsulation.Length = (UInt16)(18 + 12 + requestedPath.Length + route.Length + requestData.Length + padLength);
 
             //---------------Interface Handle CIP
             encapsulation.CommandSpecificData.Add(0);
@@ -1571,7 +1577,7 @@ namespace Sres.Net.EEIP
             commonPacketFormat.AddressLength = 0x0000;
 
             commonPacketFormat.DataItem = 0xB2;
-            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + route.Length + 12 + requestData.Length);
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + route.Length + 12 + requestData.Length + padLength);
 
             //---------------- Unconnected Message
             commonPacketFormat.Data.Add(0x52); // Unconnected Message
@@ -1586,7 +1592,6 @@ namespace Sres.Net.EEIP
             commonPacketFormat.Data.Add(0xb6); // Actual Timeout
 
             //---------------- Embedded Message Request Size
-            ushort embeddedMessageRequestSize = (ushort)(2 + requestedPath.Length + requestData.Length);
             commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize & 0xFF));
             commonPacketFormat.Data.Add((byte)(embeddedMessageRequestSize >> 8));
 
@@ -1610,6 +1615,10 @@ namespace Sres.Net.EEIP
                 commonPacketFormat.Data.Add(requestData[i]);
             }
             //----------------Request Data
+
+            //----------------Pad byte (only when the embedded request length is odd)
+            if (padLength != 0)
+                commonPacketFormat.Data.Add(0x00);
 
             //---------------- Add Route
             commonPacketFormat.Data.Add((byte)(route.Length / 2));

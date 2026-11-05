@@ -68,6 +68,14 @@ namespace Sres.Net.EEIP
                     // Append the ASCII bytes for the string.
                     byte[] asciiBytes = Encoding.ASCII.GetBytes(part);
                     bytePath.AddRange(asciiBytes);
+
+                    // Each port segment must be an even number of bytes. With an extended
+                    // link address the segment is [port][size][address...], so pad when the
+                    // address length is odd (CIP Vol 1, C-1.4.2).
+                    if (asciiBytes.Length % 2 != 0)
+                    {
+                        bytePath.Add(0);
+                    }
                 }
                 else
                 {
